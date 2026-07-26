@@ -3,7 +3,6 @@
 #include <SPI.h>
 #include <SD.h>
 
-
 //pins:
 byte status = 0; //error codes
 byte sdStatus = 0; //data logging error codes
@@ -13,7 +12,7 @@ const int exhaustPin = 2;
 const int dhtPin = 3;
 const int humidifierPin = 4;
 const int sdChipSelect = 5;
-
+const int circulatingPin = 6;
 
 //humidity variables:
 float humidity; //%rh
@@ -22,9 +21,7 @@ int humidityMargin = 5;
 byte dhtErrors = 0;
 const int dhtMaxErrors = 5;
 
-
 //int fanSpeed = 100;
-
 
 //scheduled exhaust cycle:
 unsigned long lastExhaustStart = 0; //ms
@@ -32,23 +29,17 @@ const unsigned long exhaustCycleInterval = 3600000UL; //ms
 const unsigned long exhaustCycleDuration = 300000UL; //ms
 bool exhaustCycleActive = false;
 
-
 DHT dht(dhtPin, DHT22); //humidity sensor
-
 
 LiquidCrystal_I2C lcd(0x27,20,4); //i2c address, screen width, screen height
 
-
 char filename[13]; //8.3 file name format, 8 character name and 3 character extension maximum
-
 
 unsigned long lastTime = 0; //ms
 const unsigned long interval = 2000UL; //ms
 
-
 unsigned long lastJoystickTime = 0; //ms
 const unsigned long joystickInterval = 500UL; //ms
-
 
 void setup() {
   pinMode(exhaustPin, OUTPUT); //connected to MOSFET, pull-down resistor, LOW turns off, HIGH turns on
@@ -59,17 +50,14 @@ void setup() {
   delay(1000);
 }
 
-
 void loop() {
   setTargetHumidity();
   updateExhaustCycle(); //checks if it's ready to exhaust
-
 
   unsigned long currentTime = millis();
   if (currentTime - lastTime < interval) return; //all code below this line happens every 2000 ms
   lastTime = currentTime;
   humidity = getHumidity();
-
 
   switch (status) { //error codes
     case 0: //functioning normally
@@ -85,7 +73,6 @@ void loop() {
   }
   status = 0;
 }
-
 
 float getHumidity() {
   float sensorReading = dht.readHumidity();
@@ -103,7 +90,6 @@ float getHumidity() {
     return sensorReading;
   }
 }
-
 
 void updateDisplay() {
   lcd.clear();
@@ -140,21 +126,17 @@ void logSdCard() {
   }
 }
 
-
 void setTargetHumidity() {
   unsigned long currentTime = millis();
   int yValue = analogRead(joystickRyPin);
-
 
   if (yValue < 800 && yValue > 200) { //joystick centered
     lastJoystickTime = 0;
     return;
   }
 
-
   if (currentTime - lastJoystickTime < joystickInterval) return;
   lastJoystickTime = currentTime;
-
 
   if (yValue >= 800) { //joystick pushed up
     targetHumidity += 5;
@@ -167,14 +149,12 @@ void setTargetHumidity() {
   updateDisplay();
 }
 
-
 void initializeDisplay(){
   lcd.init();
   lcd.backlight();
   lcd.setCursor(0,0);
   lcd.clear();
 }
-
 
 void createLogFile(){
   if (!SD.begin(sdChipSelect)) sdStatus = 1; //ensures that the card is connected properly
@@ -191,23 +171,25 @@ void createLogFile(){
       lcd.print(filename);
       dataLog.println(F("Time_Milliseconds,Relative_Humidity_%")); //csv header
       dataLog.close();
-    }
+    } 
     else sdStatus = 2;
   }
 }
 
-
 void updateHumidityOutputs(){
-  if (humidity <= targetHumidity - humidityMargin) //humidity too low, turn on humidifier
+  if (humidity <= targetHumidity - humidityMargin) { //humidity too low, turn on humidifier
     digitalWrite(humidifierPin, LOW);
-  if (humidity >= targetHumidity - humidityMargin/2) //humidity back up to target, turn off humidifier
+    digitalWrite(circulatingPin, HIGH);
+  }
+  if (humidity >= targetHumidity - humidityMargin/2){ //humidity back up to target, turn off humidifier
     digitalWrite(humidifierPin, HIGH);
+    digitalWrite(circulatingPin, LOW);
+  }
   if (humidity >= targetHumidity + humidityMargin) //humidity too high, turn on exhaust
     digitalWrite(exhaustPin, HIGH);
   if (humidity <= targetHumidity + humidityMargin/2) //humidity back down to target, turn off exhaust
     digitalWrite(exhaustPin, LOW);
 }
-
 
 void updateExhaustCycle(){
   unsigned long currentTime = millis();
