@@ -16,7 +16,7 @@ const int circulatingPin = 6;
 
 //humidity variables:
 float humidity; //%rh
-int targetHumidity = 80; //%rh
+int targetHumidity = 90; //%rh
 int humidityMargin = 5;
 byte dhtErrors = 0;
 const int dhtMaxErrors = 5;
